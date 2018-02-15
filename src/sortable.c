@@ -101,6 +101,7 @@ void SortingVector_RdbSave(RedisModuleIO *rdb, RSSortingVector *v) {
     switch (val->t) {
       case RSValue_String:
       case RSValue_ConstString:
+      case RSValue_SDS:
         // save string - one extra byte for null terminator
         RedisModule_SaveStringBuffer(rdb, val->strval.str, val->strval.len + 1);
         break;
@@ -128,7 +129,9 @@ RSSortingVector *SortingVector_RdbLoad(RedisModuleIO *rdb, int encver) {
     RSValueType t = RedisModule_LoadUnsigned(rdb);
 
     switch (t) {
-      case RSValue_String: {
+      case RSValue_String:
+      case RSValue_ConstString:
+      case RSValue_SDS: {
         size_t len;
         // strings include an extra character for null terminator. we set it to zero just in case
         char *s = RedisModule_LoadStringBuffer(rdb, &len);
