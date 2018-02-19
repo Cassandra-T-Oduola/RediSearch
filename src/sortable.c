@@ -16,7 +16,7 @@ RSSortingVector *NewSortingVector(int len) {
   ret->len = len;
   // set all values to NIL
   for (int i = 0; i < len; i++) {
-    ret->values[i] = NULL;  // RSValue_IncrRef(RS_NullVal());
+    ret->values[i] = RSValue_IncrRef(RS_NullVal());
   }
   return ret;
 }
@@ -97,6 +97,10 @@ void SortingVector_RdbSave(RedisModuleIO *rdb, RSSortingVector *v) {
   RedisModule_SaveUnsigned(rdb, v->len);
   for (int i = 0; i < v->len; i++) {
     RSValue *val = v->values[i];
+    if (!val) {
+      RedisModule_SaveUnsigned(rdb, RSValue_Null);
+      continue;
+    }
     RedisModule_SaveUnsigned(rdb, val->t);
     switch (val->t) {
       case RSValue_String:
@@ -146,12 +150,30 @@ RSSortingVector *SortingVector_RdbLoad(RedisModuleIO *rdb, int encver) {
         break;
       // for nil we read nothing
       case RS_SORTABLE_NIL:
-        vec->values[i] = RSValue_IncrRef(RS_NullVal());
       default:
+        vec->values[i] = RSValue_IncrRef(RS_NullVal());
         break;
     }
   }
   return vec;
+}
+
+size_t RSSortingVector_GetMemorySize(RSSortingVector *v) {
+  if (!v) return 0;
+
+  size_t sum = v->len * sizeof(RSValue *);
+  for (int i = 0; i < v->len; i++) {
+    if (!v->values[i]) continue;
+    sum += sizeof(RSValue);
+
+    RSValue *val = RSValue_Dereference(v->values[i]);
+    if (val && RSValue_IsString(val)) {
+      size_t sz;
+      RSValue_StringPtrLen(val, &sz);
+      sum += sz;
+    }
+  }
+  return sum;
 }
 
 /* Create a new sorting table of a given length */
